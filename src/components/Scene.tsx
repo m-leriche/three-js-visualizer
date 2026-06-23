@@ -9,6 +9,7 @@ import {
 } from '@react-three/rapier'
 import { Ring, type RingStyle } from './Ring'
 import { Finger } from './Finger'
+import { HandModel } from './HandModel'
 
 /** Gravity mode: 'off' floats, 'floor' piles on the ground, 'finger' slides down the finger. */
 export type GravityMode = 'off' | 'floor' | 'finger'
@@ -31,6 +32,40 @@ export type Slot = {
   turn: number // degrees around the finger axis
 }
 
+/**
+ * Placement of the ring stack when it sits on the realistic hand model. The
+ * scanned hand is a relaxed forward-curl pose with no straight finger, so the
+ * stack has to be positioned and tilted by hand to follow a finger's axis.
+ * These defaults sit it on the ring finger; tune live via the Hand controls.
+ */
+export type HandPlacement = {
+  scale: number
+  pos: [number, number, number]
+  /** Tilt (radians) so the stack axis follows the finger's up-and-forward lean. */
+  tilt: [number, number, number]
+  /** Spin (radians) of all rings together around the stack/finger axis. */
+  spin: number
+  /** Uniform scale of the whole stack — rings keep their designed proportions. */
+  ringScale: number
+  gap: number
+}
+
+export const DEFAULT_HAND_PLACEMENT: HandPlacement = {
+  scale: 0.24,
+  pos: [-0.4, 4.39, 0.37],
+  tilt: [(13 * Math.PI) / 180, 0, 0],
+  spin: (-180 * Math.PI) / 180,
+  ringScale: 0.25,
+  gap: 0.24,
+}
+
+/**
+ * Band radius the ring designs are authored against — their stones, prongs and
+ * tube thickness are absolute, so the band must stay this size and the whole
+ * stack is scaled instead (see HandPlacement.ringScale). Matches the finger.
+ */
+const RING_BAND_RADIUS = 0.94
+
 export type SceneProps = {
   gold: GoldTone
   gap: number
@@ -39,6 +74,10 @@ export type SceneProps = {
   autoRotate: boolean
   /** Gravity mode: float, pile on the floor, or slide down the finger. */
   gravity: GravityMode
+  /** Show the realistic scanned hand instead of the stylised finger. */
+  handView?: boolean
+  /** Ring-stack placement on the hand (only used when handView is on). */
+  handPlacement?: HandPlacement
   /** Optional orbit target override (for framed screenshots). */
   target?: [number, number, number]
 }
@@ -95,16 +134,35 @@ function RingBody({
  * The full visualizer scene: a studio HDR for reflections, up to three stacked
  * rings (chosen per slot) on a finger, and contact shadows on the floor.
  */
-export function Scene({ gold, gap, slots, showFinger, autoRotate, gravity, target }: SceneProps) {
+export function Scene({
+  gold,
+  gap,
+  slots,
+  showFinger,
+  autoRotate,
+  gravity,
+  handView = false,
+  handPlacement = DEFAULT_HAND_PLACEMENT,
+  target,
+}: SceneProps) {
   const goldColor = GOLD[gold]
   const fingerRadius = 0.9
   const bandRadius = fingerRadius + 0.04 // slight clearance so the band hugs the finger
+  // The hand replaces the stylised finger only in the static (no-gravity) view;
+  // physics modes still use the procedural finger and its collider.
   const physics = gravity !== 'off'
+  const showHand = handView && !physics
 
   // Only filled slots stack, centred on the finger; gap sets the spacing.
   const visible = slots.filter((s) => s.style !== 'none')
   const baseY = -0.6
-  const orbitY = gravity === 'finger' ? -1.6 : gravity === 'floor' ? GROUND_Y + 0.6 : 0.2
+  const orbitY = showHand
+    ? 3.6
+    : gravity === 'finger'
+      ? -1.6
+      : gravity === 'floor'
+        ? GROUND_Y + 0.6
+        : 0.2
 
   return (
     <>
@@ -157,6 +215,40 @@ export function Scene({ gold, gap, slots, showFinger, autoRotate, gravity, targe
             </>
           )}
         </Physics>
+      ) : showHand ? (
+        <>
+          <HandModel scale={handPlacement.scale} />
+
+          {/* Rings wrapped in a group aligned to the chosen finger's axis. The
+              group is scaled (not the band radius) so each ring keeps the
+              proportions its stones and prongs were authored against. */}
+          <group
+            position={handPlacement.pos}
+            rotation={handPlacement.tilt}
+            scale={handPlacement.ringScale}
+          >
+            {/* Inner group spins the whole stack around the finger axis (local Y),
+                before the tilt orients it onto the finger. */}
+            <group rotation={[0, handPlacement.spin, 0]}>
+              {visible.map((s, i) => {
+                const y = (i - (visible.length - 1) / 2) * handPlacement.gap
+                return (
+                  <Ring
+                    key={i}
+                    position={[0, y, 0]}
+                    rotation={[0, (s.turn * Math.PI) / 180, 0]}
+                    bandRadius={RING_BAND_RADIUS}
+                    goldColor={goldColor}
+                    style={s.style as RingStyle}
+                    flip={s.flip}
+                  />
+                )
+              })}
+            </group>
+          </group>
+
+          <ContactShadows position={[0, -0.25, 0]} opacity={0.4} scale={10} blur={2.4} far={5} />
+        </>
       ) : (
         <>
           {showFinger && <Finger radius={fingerRadius} position={[0, -1, 0]} />}

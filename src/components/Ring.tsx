@@ -289,16 +289,18 @@ const GREEN_GEM = new THREE.MeshPhysicalMaterial({
   side: THREE.DoubleSide,
 })
 
-// Light-blue stone material (sky-blue topaz / aquamarine).
+// Vivid blue topaz stone material. Saturated like the red/green gems (low
+// transmission + deep attenuation) so the bright facet reflections don't wash
+// the colour out to near-white.
 const BLUE_GEM = new THREE.MeshPhysicalMaterial({
-  color: '#9fd6ee',
+  color: '#0a5fd6',
   metalness: 0,
   roughness: 0.05,
-  transmission: 0.35,
+  transmission: 0.16,
   thickness: 0.3,
   ior: 1.6,
-  attenuationColor: new THREE.Color('#6fb8d8'),
-  attenuationDistance: 0.7,
+  attenuationColor: new THREE.Color('#062f86'),
+  attenuationDistance: 0.6,
   reflectivity: 1,
   clearcoat: 1,
   clearcoatRoughness: 0,

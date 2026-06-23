@@ -2,7 +2,13 @@ import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { ACESFilmicToneMapping, SRGBColorSpace } from 'three'
 import { useControls, folder } from 'leva'
-import { Scene, type GoldTone, type Slot, type GravityMode } from './components/Scene'
+import {
+  Scene,
+  type GoldTone,
+  type Slot,
+  type GravityMode,
+  type HandPlacement,
+} from './components/Scene'
 import type { RingStyle } from './components/Ring'
 import './App.css'
 
@@ -23,7 +29,17 @@ export default function App() {
     gap,
     gravity,
     showFinger,
+    handView,
     autoRotate,
+    hScale,
+    hx,
+    hy,
+    hz,
+    hTiltX,
+    hTiltZ,
+    hSpin,
+    hRingScale,
+    hGap,
     design1,
     flip1,
     turn1,
@@ -33,6 +49,9 @@ export default function App() {
     design3,
     flip3,
     turn3,
+    design4,
+    flip4,
+    turn4,
   } = useControls({
     Scene: folder({
       gold: { value: 'yellow' as GoldTone, options: ['yellow', 'rose', 'white'] },
@@ -43,11 +62,28 @@ export default function App() {
         label: 'gravity',
       },
       showFinger: { value: true, label: 'show finger' },
-      autoRotate: { value: true, label: 'auto-rotate' },
+      handView: { value: true, label: 'hand view' },
+      autoRotate: { value: false, label: 'auto-rotate' },
     }),
+    // Placement of the ring stack on the realistic hand. The scan is a relaxed
+    // curl with no straight finger, so the stack is positioned/tilted by hand.
+    'Hand (ring placement)': folder(
+      {
+        hScale: { value: 0.24, min: 0.1, max: 0.5, step: 0.005, label: 'hand scale' },
+        hx: { value: -0.4, min: -1.2, max: 1.2, step: 0.001, label: 'stack x' },
+        hy: { value: 4.39, min: 2, max: 5, step: 0.01, label: 'stack y' },
+        hz: { value: 0.37, min: -1, max: 1.5, step: 0.01, label: 'stack z' },
+        hTiltX: { value: 13, min: -90, max: 90, step: 1, label: 'tilt x°' },
+        hTiltZ: { value: 0, min: -45, max: 45, step: 1, label: 'tilt z°' },
+        hSpin: { value: -180, min: -180, max: 180, step: 1, label: 'spin°' },
+        hRingScale: { value: 0.25, min: 0.1, max: 0.5, step: 0.005, label: 'ring scale' },
+        hGap: { value: 0.24, min: 0.1, max: 0.8, step: 0.01, label: 'ring gap' },
+      },
+      { collapsed: true },
+    ),
     'Ring 1': folder({
       design1: { value: 'asym-garnet' as RingStyle | 'none', options: DESIGN_OPTIONS, label: 'design' },
-      flip1: { value: false, label: 'flip' },
+      flip1: { value: true, label: 'flip' },
       turn1: { value: 0, min: 0, max: 360, step: 1, label: 'turn°' },
     }),
     'Ring 2': folder({
@@ -60,12 +96,18 @@ export default function App() {
       flip3: { value: false, label: 'flip' },
       turn3: { value: 0, min: 0, max: 360, step: 1, label: 'turn°' },
     }),
+    'Ring 4': folder({
+      design4: { value: 'asym-topaz' as RingStyle | 'none', options: DESIGN_OPTIONS, label: 'design' },
+      flip4: { value: true, label: 'flip' },
+      turn4: { value: 0, min: 0, max: 360, step: 1, label: 'turn°' },
+    }),
   })
 
   const slots: Slot[] = [
     { style: design1, flip: flip1, turn: turn1 },
     { style: design2, flip: flip2, turn: turn2 },
     { style: design3, flip: flip3, turn: turn3 },
+    { style: design4, flip: flip4, turn: turn4 },
   ]
 
   // Screenshot/dev overrides: ?solo=<style> isolates one ring; ?shot freezes it;
@@ -85,6 +127,21 @@ export default function App() {
     : params.has('physics')
       ? 'floor'
       : (gravity as GravityMode)
+
+  // Hand-placement values come from the leva sliders, but a matching URL param
+  // (?hx=, ?hSpin=, …) overrides for framed screenshots / sharing a setup.
+  const hp = (key: string, fallback: number) =>
+    params.has(key) ? Number(params.get(key)) : fallback
+  const handPlacement: HandPlacement = {
+    scale: hp('hScale', hScale),
+    pos: [hp('hx', hx), hp('hy', hy), hp('hz', hz)],
+    tilt: [(hp('hTiltX', hTiltX) * Math.PI) / 180, 0, (hp('hTiltZ', hTiltZ) * Math.PI) / 180],
+    spin: (hp('hSpin', hSpin) * Math.PI) / 180,
+    ringScale: hp('hRingScale', hRingScale),
+    gap: hp('hGap', hGap),
+  }
+  // ?handview forces the hand on for framed screenshots.
+  const effectiveHandView = params.has('handview') || handView
 
   return (
     <div className="app">
@@ -116,6 +173,8 @@ export default function App() {
             slots={effectiveSlots}
             gravity={effectiveGravity}
             showFinger={shot ? false : showFinger}
+            handView={effectiveHandView}
+            handPlacement={handPlacement}
             autoRotate={shot ? false : autoRotate}
             target={target}
           />
